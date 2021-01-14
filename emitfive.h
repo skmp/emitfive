@@ -5,7 +5,7 @@ namespace emitfive {
     enum RegisterClass {
         RC_INVALID = 0,
         RC_GPR,
-        RC_FPU,
+        RC_FPR,
         RC_COUNT
     };
 
@@ -53,8 +53,6 @@ namespace emitfive {
     };
 
     namespace riscv64 {
-
-        
         struct EncoderGeneric {
             CodeBuffer* const buffer;
             EncoderGeneric(CodeBuffer* buffer) : buffer(buffer) { }
@@ -63,82 +61,96 @@ namespace emitfive {
             virtual void operator()(const Register src1, const Register src2, const Label& destination) const { assert("Unsupported encoding"); }
             virtual void operator()(const Register dst, const Register src1, const Register src2) const { assert("Unsupported encoding"); }
 
+            virtual bool CanEncodeR() { return false; }
+            virtual bool CanEncodeR4() { return false; }
+            virtual bool CanEncodeI() { return false; }
+            virtual bool CanEncodeS() { return false; }
+            virtual bool CanEncodeB() { return false; }
+            virtual bool CanEncodeU() { return false; }
             virtual bool CanEncodeJ() { return false; }
-            virtual bool CanEncodeBranch() { return false; }
-            virtual bool CanEncodeJump() { return false; }
+
         };
 
-        struct EncoderJ: public EncoderGeneric {
-            using EncoderGeneric::EncoderGeneric;
-
-            virtual void operator()(const Register dst, const Register src1, const Register src2) const {
-                buffer->Emit32(0xDEADBEEF | dst.code << 26 | src1.code << 20 | src2.code << 8 );
-            }
-            virtual bool CanEncodeJ() { return true; }
+#define ENCODER_SPEC(Type, Template, Arguments, Encode) \
+        struct Encoder##Type: public EncoderGeneric { \
+            using EncoderGeneric::EncoderGeneric; \
+            virtual bool CanEncode##Type() { return true; } \
+        };\
+        template Template \
+        struct Encoder##Type##Emit: public Encoder##Type { \
+            using Encoder##Type::Encoder##Type; \
+            virtual void operator() Arguments const { \
+                buffer->Emit32 Encode; \
+            } \
         };
 
-        template<uint32_t BaseOp>
-        struct EncoderJEmit: public EncoderJ {
-            using EncoderJ::EncoderJ;
+#define TPL(...) __VA_ARGS__    
 
-            using EncoderJ::operator();
-        };
+        ENCODER_SPEC(R,
+            TPL(<uint32_t funct7, uint32_t funct3, uint32_t opcode>),
+            (const Register rd, const Register rs1, const Register rs2),
+            ((funct7 << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
+        )
 
-        struct EncoderJump: public EncoderGeneric {
-            using EncoderGeneric::EncoderGeneric;
+        ENCODER_SPEC(R4,
+            TPL(<uint32_t funct2, uint32_t funct3, uint32_t opcode>),
+            (const Register rd, const Register rs1, const Register rs2, const Register rs3),
+            ((rs3.code << 27) | (funct2 << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
+        )
 
-            virtual void operator()(const Label& destination) const {
-                buffer->Emit32(0xDEADBEEF | destination.codePointer );
-            }
-            virtual bool CanEncodeJump() { return true; }
-        };
+        ENCODER_SPEC(I,
+            TPL(<uint32_t funct3, uint32_t opcode>),
+            (const Register rd, const Register rs1, const uint32_t imm12),
+            ((imm12 << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
+        )
 
-        template<uint32_t BaseOp>
-        struct EncoderJumpEmit: public EncoderJump {
-            using EncoderJump::EncoderJump;
+        ENCODER_SPEC(S,
+            TPL(<uint32_t funct3, uint32_t opcode>),
+            (const Register rs1, const Register rs2, const uint32_t imm7),
+            ((imm7 << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct3 << 12) | (imm7 << 7) | (opcode << 0))
+        )
 
-            using EncoderJump::operator();
-        };
+        ENCODER_SPEC(B,
+            TPL(<uint32_t funct3, uint32_t opcode>),
+            (const Register rs1, const Register rs2, const Label& destination),
+            ((0 /*imm7*/ << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct3 << 12) | (0 /*imm7*/ << 7) | (opcode << 0))
+        )
 
-        struct EncoderBranch: public EncoderGeneric {
-            using EncoderGeneric::EncoderGeneric;
+        ENCODER_SPEC(U,
+            TPL(<uint32_t opcode>),
+            (const Register rd, const uint32_t imm20),
+            ((imm20 << 12) | (rd.code << 7) | (opcode << 0))
+        )
 
-            virtual void operator()(const Register src1, const Register src2, const Label& destination) const {
-                buffer->Emit32(0xDEADBEEF | destination.codePointer | src1.code << 20 | src2.code << 8 );
-            }
-            virtual bool CanEncodeBranch() { return true; }
-        };
+        ENCODER_SPEC(J,
+            TPL(<uint32_t opcode>),
+            (const Register rd, const Label& destination),
+            ((0 /*imm20*/ << 12) | (rd.code << 7) | (opcode << 0))
+        )
 
-        template<uint32_t BaseOp>
-        struct EncoderBranchEmit: public EncoderBranch {
-            using EncoderBranch::EncoderBranch;
+#define INSTRUCTION(Name, name, Type, ...) \
+        struct Name##Instruction final: public Encoder##Type##Emit<__VA_ARGS__> { using Encoder##Type##Emit::operator(); using Encoder##Type##Emit::Encoder##Type##Emit; };
 
-            using EncoderBranch::operator();
-        };
+#include "emitfive-riscv-insn.inl"
 
-        struct AddInstruction final: public EncoderJEmit<0> { using EncoderJEmit::operator(); using EncoderJEmit::EncoderJEmit; };
-        struct SubInstruction final: public EncoderJEmit<1> { using EncoderJEmit::operator(); using EncoderJEmit::EncoderJEmit; };
-        struct MulInstruction final: public EncoderJEmit<2> { using EncoderJEmit::operator(); using EncoderJEmit::EncoderJEmit; };
-        struct DivInstruction final: public EncoderJEmit<3> { using EncoderJEmit::operator(); using EncoderJEmit::EncoderJEmit; };
-
-        struct JalInstruction final: public EncoderJumpEmit<0> { using EncoderJumpEmit::operator(); using EncoderJumpEmit::EncoderJumpEmit; };
-
-        struct BeqInstruction final: public EncoderBranchEmit<0> { using EncoderBranchEmit::operator(); using EncoderBranchEmit::EncoderBranchEmit; };
-        struct BneInstruction final: public EncoderBranchEmit<0> { using EncoderBranchEmit::operator(); using EncoderBranchEmit::EncoderBranchEmit; };
-        struct BgeInstruction final: public EncoderBranchEmit<0> { using EncoderBranchEmit::operator(); using EncoderBranchEmit::EncoderBranchEmit; };
-        struct BgtInstruction final: public EncoderBranchEmit<0> { using EncoderBranchEmit::operator(); using EncoderBranchEmit::EncoderBranchEmit; };
+#undef INSTRUCTION
 
         struct Assembler {
             using Label = Label;
             using EncoderGeneric = EncoderGeneric;
+            using EncoderR = EncoderR;
+            using EncoderR4 = EncoderR4;
+            using EncoderI = EncoderI;
+            using EncoderS = EncoderS;
+            using EncoderB = EncoderB;
+            using EncoderU = EncoderU;
             using EncoderJ = EncoderJ;
-            using EncoderJump = EncoderJump;
-            using EncoderBranch = EncoderBranch;
 
             Assembler(uint32_t* dataBuffer) : buffer(dataBuffer) { }
 
             CodeBuffer buffer;
-            #define REGISTER_DECL(n) static constexpr const Register r##n {n, RC_GPR, RS_32}
+            #define REGISTER_DECL(n) \
+                static constexpr const Register x##n {n, RC_GPR, RS_32}
 
             REGISTER_DECL(0); REGISTER_DECL(1); REGISTER_DECL(2); REGISTER_DECL(3);
             REGISTER_DECL(4); REGISTER_DECL(5); REGISTER_DECL(6); REGISTER_DECL(7);
@@ -151,22 +163,111 @@ namespace emitfive {
 
             #undef REGISTER_DECL
 
+            #define REGISTER_ALIAS(name, n) \
+                static constexpr const Register name = x##n
+
+            REGISTER_ALIAS(zero, 0);
+            REGISTER_ALIAS(ra, 1);
+            REGISTER_ALIAS(sp, 2);
+            REGISTER_ALIAS(gp, 3);
+            REGISTER_ALIAS(tp, 4);
+            REGISTER_ALIAS(t0, 5);
+            REGISTER_ALIAS(t1, 6);
+            REGISTER_ALIAS(t2, 7);
+            REGISTER_ALIAS(s0, 8);
+            REGISTER_ALIAS(fp, 8);
+            REGISTER_ALIAS(s1, 9);
+            REGISTER_ALIAS(a0, 10);
+            REGISTER_ALIAS(r0, 10);
+            REGISTER_ALIAS(a1, 11);
+            REGISTER_ALIAS(r1, 11);
+            REGISTER_ALIAS(a2, 12);
+            REGISTER_ALIAS(a3, 13);
+            REGISTER_ALIAS(a4, 14);
+            REGISTER_ALIAS(a5, 15);
+            REGISTER_ALIAS(a6, 16);
+            REGISTER_ALIAS(a7, 17);
+            REGISTER_ALIAS(s2, 18);
+            REGISTER_ALIAS(s3, 19);
+            REGISTER_ALIAS(s4, 20);
+            REGISTER_ALIAS(s5, 21);
+            REGISTER_ALIAS(s6, 22);
+            REGISTER_ALIAS(s7, 23);
+            REGISTER_ALIAS(s8, 24);
+            REGISTER_ALIAS(s9, 25);
+            REGISTER_ALIAS(s10, 26);
+            REGISTER_ALIAS(s11, 27);
+            REGISTER_ALIAS(t3, 28);
+            REGISTER_ALIAS(t4, 29);
+            REGISTER_ALIAS(t5, 30);
+            REGISTER_ALIAS(t6, 31);
+
+            #undef REGISTER_ALIAS
+
+            #define REGISTER_DECL(n) \
+                static constexpr const Register f##n {n, RC_FPR, RS_32}
+
+            REGISTER_DECL(0); REGISTER_DECL(1); REGISTER_DECL(2); REGISTER_DECL(3);
+            REGISTER_DECL(4); REGISTER_DECL(5); REGISTER_DECL(6); REGISTER_DECL(7);
+            REGISTER_DECL(8); REGISTER_DECL(9); REGISTER_DECL(10);REGISTER_DECL(11);
+            REGISTER_DECL(12); REGISTER_DECL(13); REGISTER_DECL(14); REGISTER_DECL(15);
+            REGISTER_DECL(16); REGISTER_DECL(17); REGISTER_DECL(18); REGISTER_DECL(19);
+            REGISTER_DECL(20); REGISTER_DECL(21); REGISTER_DECL(22); REGISTER_DECL(23);
+            REGISTER_DECL(24); REGISTER_DECL(25); REGISTER_DECL(26); REGISTER_DECL(27);
+            REGISTER_DECL(28); REGISTER_DECL(29); REGISTER_DECL(30); REGISTER_DECL(31);
+
+            #undef REGISTER_DECL
+
+            #define REGISTER_ALIAS(name, n) \
+                static constexpr const Register name = x##n
+
+            REGISTER_ALIAS(ft0, 0);
+            REGISTER_ALIAS(ft1, 1);
+            REGISTER_ALIAS(ft2, 2);
+            REGISTER_ALIAS(ft3, 3);
+            REGISTER_ALIAS(ft4, 4);
+            REGISTER_ALIAS(ft5, 5);
+            REGISTER_ALIAS(ft6, 6);
+            REGISTER_ALIAS(ft7, 7);
+            REGISTER_ALIAS(fs0, 8);
+            REGISTER_ALIAS(fs1, 9);
+            REGISTER_ALIAS(fa0, 10);
+            REGISTER_ALIAS(fr0, 10);
+            REGISTER_ALIAS(fa1, 11);
+            REGISTER_ALIAS(fr1, 11);
+            REGISTER_ALIAS(fa2, 12);
+            REGISTER_ALIAS(fa3, 13);
+            REGISTER_ALIAS(fa4, 14);
+            REGISTER_ALIAS(fa5, 15);
+            REGISTER_ALIAS(fa6, 16);
+            REGISTER_ALIAS(fa7, 17);
+            REGISTER_ALIAS(fs2, 18);
+            REGISTER_ALIAS(fs3, 19);
+            REGISTER_ALIAS(fs4, 20);
+            REGISTER_ALIAS(fs5, 21);
+            REGISTER_ALIAS(fs6, 22);
+            REGISTER_ALIAS(fs7, 23);
+            REGISTER_ALIAS(fs8, 24);
+            REGISTER_ALIAS(fs9, 25);
+            REGISTER_ALIAS(fs10, 26);
+            REGISTER_ALIAS(fs11, 27);
+            REGISTER_ALIAS(ft8, 28);
+            REGISTER_ALIAS(ft9, 29);
+            REGISTER_ALIAS(ft10, 30);
+            REGISTER_ALIAS(ft11, 31);
+
+            #undef REGISTER_ALIAS
+
             void bind(Label& label) {
                 assert(label.bound == false);
                 label.bound = true;
             }
 
-            const AddInstruction add { &buffer };
-            const SubInstruction sub { &buffer };
-            const MulInstruction mul { &buffer };
-            const DivInstruction div { &buffer };
+#define INSTRUCTION(Name, name, Type, ...) const Name##Instruction name { &buffer };
 
-            const JalInstruction jal { &buffer };
+#include "emitfive-riscv-insn.inl"
 
-            const BeqInstruction beq { &buffer };
-            const BneInstruction bne { &buffer };
-            const BgeInstruction bge { &buffer };
-            const BgtInstruction bgt { &buffer };
+#undef INSTRUCTION
         };
     }
 }

@@ -15,22 +15,22 @@ struct MyEmitter: emitfive::riscv64::Assembler {
             insn(dst);
             bind(dst);
         } else {
-            insn(r0, r1, r2);
+            insn(x0, x1, x2);
         }
     }
 
     void EncoderGenericTest(const EncoderGeneric& insn) {
-        insn(r3, r0, r3);
+        insn(x3, x0, x3);
 
         // should generate runtime error
         Label dst;
         insn(dst);
 
-        insn(r0, r1, dst);
+        insn(x0, x1, dst);
     }
 
-    void EncoderJTest(const EncoderJ& insn) {
-        insn(r1, r2, r3);
+    void EncoderRTest(const EncoderR& insn) {
+        insn(x1, x2, x3);
 
         /*
         //these should fail
@@ -53,31 +53,31 @@ struct MyEmitter: emitfive::riscv64::Assembler {
     void BranchTest() {
         Label fn(&StaticFunction);
 
-        jal(fn);
+        jal(x1, fn);
 
         Label ptr(0xC0DEC0de);
         
-        jal(ptr);
+        jal(x1, ptr);
 
         Label local;
 
-        beq(r1, r2, local);
+        beq(x1, x2, local);
 
         bind(local);
 
         Label memberFn(&MyEmitter::MemberFunction);
 
-        jal(memberFn);
+        jal(x1, memberFn);
     }
 
     void EmitSomething() {
-        add(r0, r1, r2);
-        sub(r1, r2, r3);
-        mul(r31, r8, r11);
-        div(r22, r12, r7);
+        add(x0, x1, x2);
+        sub(x1, x2, x3);
+        //mul(x31, x8, x11);
+        //div(x22, x12, x7);
 
-        EncoderJTest(add);
-        EncoderJTest(div);
+        EncoderRTest(add);
+        EncoderRTest(sub);
         BranchTest();
         EncoderGenericTest(add);
         FlexbileCodeGenerationTest(false, add);
@@ -98,7 +98,7 @@ int main() {
 
     test.EmitSomething();
 
-    test.div(test.r0, test.r2, test.r3);
+    test.sub(test.x0, test.x2, test.x3);
     
     test.Print();
     
