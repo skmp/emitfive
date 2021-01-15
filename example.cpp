@@ -9,7 +9,7 @@ struct MyEmitter: emitfive::riscv64::Assembler {
 
     }
 
-    void FlexbileCodeGenerationTest(bool branch, const EncoderGeneric& insn) {
+    void FlexbileCodeGenerationTest(bool branch, const Encoder& insn) {
         if (branch) {
             Label dst;
             insn(dst);
@@ -19,7 +19,7 @@ struct MyEmitter: emitfive::riscv64::Assembler {
         }
     }
 
-    void EncoderGenericTest(const EncoderGeneric& insn) {
+    void EncoderGenericTest(const Encoder& insn) {
         insn(x3, x0, x3);
 
         // should generate runtime error
@@ -103,6 +103,39 @@ struct MyEmitter: emitfive::riscv64::Assembler {
     }
 };
 
+struct MyMacroEmitter: emitfive::riscv64::MacroAssembler {
+    uint32_t codeBuffer[64];
+
+    MyMacroEmitter() : emitfive::riscv64::MacroAssembler(codeBuffer) {
+
+    }
+
+    void EmitSomething() {
+        Add(a0, a0, 3);
+        Add(r0, a0, a1);
+        Ret();
+
+        Add(a0.w(), a0, 3);
+        Add(r0.w(), a0, a1);
+        Ret();
+    }
+
+    void Print() {
+        for (uint32_t v : codeBuffer) {
+            printf("%08X ", v);
+        }
+        printf("\n");
+
+        auto f = fopen("dump.bin", "wb");
+        fwrite(codeBuffer, 1, sizeof(codeBuffer), f);
+        fclose(f);
+
+        // TODO: Flush Cache
+        int (*jitAdd)(int, int) = reinterpret_cast<int (*)(int, int)>(codeBuffer);
+        printf("1 + 3 = %d\n", jitAdd(1, 3));
+    }
+};
+
 int main() {
     printf("Test\n");
     MyEmitter test;
@@ -112,6 +145,12 @@ int main() {
     test.sub(test.x0, test.x2, test.x3);
     
     test.Print();
+
+    MyMacroEmitter test2;
+
+    test2.EmitSomething();
+
+    test2.Print();
     
     return 0;
 }
