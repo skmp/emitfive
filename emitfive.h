@@ -93,15 +93,45 @@ namespace emitfive {
         )
 
         ENCODER_SPEC(R4,
-            TPL(<uint32_t funct2, uint32_t funct3, uint32_t opcode>),
-            (const Register rd, const Register rs1, const Register rs2, const Register rs3),
-            ((rs3.code << 27) | (funct2 << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
+            TPL(<uint32_t funct3, uint32_t opcode>),
+            (const Register rd, const Register rs1, const Register rs2, const Register rs3, const uint32_t rm),
+            ((rs3.code << 27) | (rm << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
+        )
+
+        ENCODER_SPEC(RF,
+            TPL(<uint32_t funct7, uint32_t opcode>),
+            (const Register rd, const Register rs1, const Register rs2, const Register rs3, const uint32_t rm),
+            ((rs3.code << 27) | (rm << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct7 << 12) | (rd.code << 7) | (opcode << 0))
+        )
+
+        ENCODER_SPEC(R2F,
+            TPL(<uint32_t funct7, uint32_t funct5, uint32_t funct3, uint32_t opcode>),
+            (const Register rd, const Register rs1, const Register rs2, const Register rs3, const uint32_t rm),
+            ((rs3.code << 27) | (rm << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
+        )
+
+        ENCODER_SPEC(R3F,
+            TPL(<uint32_t funct7, uint32_t funct5, uint32_t opcode>),
+            (const Register rd, const Register rs1, const Register rs2, const Register rs3, const uint32_t rm),
+            ((rs3.code << 27) | (rm << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct5 << 12) | (rd.code << 7) | (opcode << 0))
         )
 
         ENCODER_SPEC(I,
             TPL(<uint32_t funct3, uint32_t opcode>),
             (const Register rd, const Register rs1, const uint32_t imm12),
             ((imm12 << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
+        )
+
+        ENCODER_SPEC(IS32,
+            TPL(<uint32_t funct7, uint32_t funct3, uint32_t opcode>),
+            (const Register rd, const Register rs1, const uint32_t imm5),
+            ((funct7 << 25) | (imm5 << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
+        )
+
+        ENCODER_SPEC(IS64,
+            TPL(<uint32_t funct6, uint32_t funct3, uint32_t opcode>),
+            (const Register rd, const Register rs1, const uint32_t imm6),
+            ((funct6 << 26) | (imm6 << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
         )
 
         ENCODER_SPEC(S,

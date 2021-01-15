@@ -71,6 +71,9 @@ struct MyEmitter: emitfive::riscv64::Assembler {
     }
 
     void EmitSomething() {
+        add(r0, a0, a1);
+        jalr(x0, ra, 0);
+
         add(x0, x1, x2);
         sub(x1, x2, x3);
         //mul(x31, x8, x11);
@@ -89,6 +92,14 @@ struct MyEmitter: emitfive::riscv64::Assembler {
             printf("%08X ", v);
         }
         printf("\n");
+
+        auto f = fopen("dump.bin", "wb");
+        fwrite(codeBuffer, 1, sizeof(codeBuffer), f);
+        fclose(f);
+
+        // TODO: Flush Cache
+        int (*jitAdd)(int, int) = reinterpret_cast<int (*)(int, int)>(codeBuffer);
+        printf("1 + 3 = %d\n", jitAdd(1, 3));
     }
 };
 
