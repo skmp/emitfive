@@ -1,5 +1,6 @@
 #include <cstdint>
 #include <cassert>
+#include <functional>
 
 namespace emitfive {
     enum RegisterClass {
@@ -22,11 +23,11 @@ namespace emitfive {
     };
 
     struct RegisterGpr: Register {
-        constexpr RegisterGpr(uint8_t code, uint32_t size): Register { code, RC_GPR, size } { }
-        constexpr RegisterGpr(const RegisterGpr& other): Register { other.code, other.type, other.size } { }
+        inline constexpr RegisterGpr(uint8_t code, uint32_t size): Register { code, RC_GPR, size } { }
+        inline constexpr RegisterGpr(const RegisterGpr& other): Register { other.code, other.type, other.size } { }
 
-        constexpr RegisterGpr w() const { return RegisterGpr { code, RS_32 }; }
-        constexpr RegisterGpr d() const { return RegisterGpr { code, RS_64 }; }
+        inline constexpr RegisterGpr w() const { return RegisterGpr { code, RS_32 }; }
+        inline constexpr RegisterGpr d() const { return RegisterGpr { code, RS_64 }; }
     };
 
     struct RegisterFpr: Register {
@@ -65,135 +66,187 @@ namespace emitfive {
         }
     };
 
+    struct EncoderContext {
+        CodeBuffer* buffer;
+
+        EncoderContext(CodeBuffer* buffer): buffer(buffer) { }
+    };
+
     namespace riscv64 {
+
+       
         struct Encoder {
-            CodeBuffer* const buffer;
-            Encoder(CodeBuffer* buffer) : buffer(buffer) { }
+            const std::function<void(const RegisterGpr dst, const Label& destination)> emitLabel1;
+            const std::function<void(const RegisterGpr src1, const RegisterGpr src2, const Label& destination)> emitLabel2;
+            const std::function<void(const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2)> emitDst;
+            const std::function<void(const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2, const RegisterGpr src3, const uint32_t rm)> emitDst2;
+            const std::function<void(const RegisterGpr r1, const RegisterGpr r2, const uint32_t imm)> emitImm;
+            const std::function<void(const RegisterGpr rd, const uint32_t imm20)> emitImm20;
+            const std::function<bool()> CanEncodeR, CanEncodeR4, CanEncodeRF, CanEncodeR2F, CanEncodeR3F, CanEncodeI, CanEncodeIS32, CanEncodeIS64, CanEncodeS, CanEncodeB, CanEncodeU, CanEncodeJ;
 
-            virtual void operator()(const Label& destination) const { assert("Unsupported encoding"); }
-            virtual void operator()(const RegisterGpr src1, const RegisterGpr src2, const Label& destination) const { assert("Unsupported encoding"); }
-            virtual void operator()(const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2) const { assert("Unsupported encoding"); }
+            inline Encoder() : emitLabel1([](const RegisterGpr dst, const Label& destination) {
+                    assert("Invalid Encoding");
+                }),
+                emitLabel2([](const RegisterGpr src1, const RegisterGpr src2, const Label& destination) {
+                    assert("Invalid Encoding");
+                }),
+                emitDst([](const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2) {
+                    assert("Invalid Encoding");
+                }),
+                CanEncodeR([]{ return false; }),
+                CanEncodeR4([]{ return false; }),
+                CanEncodeRF([]{ return false; }),
+                CanEncodeR2F([]{ return false; }),
+                CanEncodeR3F([]{ return false; }),
+                CanEncodeI([]{ return false; }),
+                CanEncodeIS32([]{ return false; }),
+                CanEncodeIS64([]{ return false; }),
+                CanEncodeS([]{ return false; }),
+                CanEncodeB([]{ return false; }),
+                CanEncodeU([]{ return false; }),
+                CanEncodeJ([]{ return false; })
+            {
+               
+            }
 
-            virtual bool CanEncodeR() { return false; }
-            virtual bool CanEncodeR4() { return false; }
-            virtual bool CanEncodeI() { return false; }
-            virtual bool CanEncodeS() { return false; }
-            virtual bool CanEncodeB() { return false; }
-            virtual bool CanEncodeU() { return false; }
-            virtual bool CanEncodeJ() { return false; }
+            inline ~Encoder() { }
 
+            inline void operator()(const RegisterGpr dst, const Label& destination) const { emitLabel1(dst, destination); }
+            inline void operator()(const RegisterGpr src1, const RegisterGpr src2, const Label& destination) const { emitLabel2(src1, src2, destination); }
+            inline void operator()(const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2) const { emitDst(dst, src1, src2); }
+            inline void operator()(const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2, const RegisterGpr src3, const uint32_t rm) const { emitDst2(dst, src1, src2, src3, rm); }
+            inline void operator()(const RegisterGpr r1, const RegisterGpr r2, const uint32_t imm) const { emitImm(r1, r2, imm); }        
+            inline void operator()(const RegisterGpr rd, const uint32_t imm20) const { emitImm20(rd, imm20); }            
         };
 
-#define ENCODER_SPEC(Type, Template, Arguments, Encode) \
-        struct Encoder##Type: public Encoder { \
-            using Encoder::Encoder; \
-            virtual bool CanEncode##Type() { return true; } \
-        };\
+#define ENCODER_SPEC(Type, GenericEncoderFunction, Template, Instantiation, Arguments, Values, Encode) \
+        struct Encoder##Type { \
+            const std::function<void Arguments> encoder; \
+            inline void operator() Arguments const { encoder Values; }\
+            inline operator Encoder() const { const auto rv = Encoder(); /*rv.CanEncode##Type = []() { return true; }; rv.GenericEncoderFunction = std::move([this] Arguments { encoder Values; });*/ return rv; } \
+            inline Encoder##Type(std::function<void Arguments> encoder) : encoder(encoder) { } \
+        }; \
         template Template \
-        struct Encoder##Type##Emit: public Encoder##Type { \
-            using Encoder##Type::Encoder##Type; \
-            virtual void operator() Arguments const { \
+        struct Emit##Type: EncoderContext { \
+            inline void operator() Arguments const { \
                 buffer->Emit32 Encode; \
             } \
+            inline operator Encoder##Type() const  { auto Buffer = buffer; return Encoder##Type([Buffer] Arguments { Buffer->Emit32 Encode; }); } \
+            inline operator Encoder() const { return this->operator Encoder##Type(); } \
         };
 
 #define TPL(...) __VA_ARGS__    
 
-        ENCODER_SPEC(R,
+        ENCODER_SPEC(R, emitDst,
             TPL(<uint32_t funct7, uint32_t funct3, uint32_t opcode>),
+            TPL(<funct7, funct3, opcode>),
             (const RegisterGpr rd, const RegisterGpr rs1, const RegisterGpr rs2),
+            (rd, rs1, rs2),
             ((funct7 << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
         )
 
-        ENCODER_SPEC(R4,
+        ENCODER_SPEC(R4, emitDst2,
             TPL(<uint32_t funct3, uint32_t opcode>),
+            TPL(<funct3, opcode>),
             (const RegisterGpr rd, const RegisterGpr rs1, const RegisterGpr rs2, const RegisterGpr rs3, const uint32_t rm),
+            (rd, rs1, rs2,rs3, rm),
             ((rs3.code << 27) | (rm << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
         )
 
-        ENCODER_SPEC(RF,
+        ENCODER_SPEC(RF, emitDst2,
             TPL(<uint32_t funct7, uint32_t opcode>),
+            TPL(<funct7, opcode>),
             (const RegisterGpr rd, const RegisterGpr rs1, const RegisterGpr rs2, const RegisterGpr rs3, const uint32_t rm),
+            (rd, rs1, rs2, rs3, rm),
             ((rs3.code << 27) | (rm << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct7 << 12) | (rd.code << 7) | (opcode << 0))
         )
 
-        ENCODER_SPEC(R2F,
+        ENCODER_SPEC(R2F, emitDst2,
             TPL(<uint32_t funct7, uint32_t funct5, uint32_t funct3, uint32_t opcode>),
+            TPL(<funct7, funct5, funct3, opcode>),
             (const RegisterGpr rd, const RegisterGpr rs1, const RegisterGpr rs2, const RegisterGpr rs3, const uint32_t rm),
+            (rd, rs1, rs2, rs3, rm),
             ((rs3.code << 27) | (rm << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
         )
 
-        ENCODER_SPEC(R3F,
+        ENCODER_SPEC(R3F, emitDst2,
             TPL(<uint32_t funct7, uint32_t funct5, uint32_t opcode>),
+            TPL(<funct7, funct5, opcode>),
             (const RegisterGpr rd, const RegisterGpr rs1, const RegisterGpr rs2, const RegisterGpr rs3, const uint32_t rm),
+            (rd, rs1, rs2, rs3, rm),
             ((rs3.code << 27) | (rm << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct5 << 12) | (rd.code << 7) | (opcode << 0))
         )
 
-        ENCODER_SPEC(I,
+        ENCODER_SPEC(I, emitImm,
             TPL(<uint32_t funct3, uint32_t opcode>),
+            TPL(<funct3, opcode>),
             (const RegisterGpr rd, const RegisterGpr rs1, const uint32_t imm12),
+            (rd, rs1, imm12),
             ((imm12 << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
         )
 
-        ENCODER_SPEC(IS32,
+        ENCODER_SPEC(IS32, emitImm,
             TPL(<uint32_t funct7, uint32_t funct3, uint32_t opcode>),
+            TPL(<funct7, funct3, opcode>),
             (const RegisterGpr rd, const RegisterGpr rs1, const uint32_t imm5),
+            (rd, rs1, imm5),
             ((funct7 << 25) | (imm5 << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
         )
 
-        ENCODER_SPEC(IS64,
+        ENCODER_SPEC(IS64, emitImm,
             TPL(<uint32_t funct6, uint32_t funct3, uint32_t opcode>),
+            TPL(<funct6, funct3, opcode>),
             (const RegisterGpr rd, const RegisterGpr rs1, const uint32_t imm6),
+            (rd, rs1, imm6),
             ((funct6 << 26) | (imm6 << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
         )
 
-        ENCODER_SPEC(S,
+        ENCODER_SPEC(S, emitImm,
             TPL(<uint32_t funct3, uint32_t opcode>),
+            TPL(<funct3, opcode>),
             (const RegisterGpr rs1, const RegisterGpr rs2, const uint32_t imm7),
+            (rs1, rs2, imm7),
             ((imm7 << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct3 << 12) | (imm7 << 7) | (opcode << 0))
         )
 
-        ENCODER_SPEC(B,
+        ENCODER_SPEC(B, emitLabel2,
             TPL(<uint32_t funct3, uint32_t opcode>),
+            TPL(<funct3, opcode>),
             (const RegisterGpr rs1, const RegisterGpr rs2, const Label& destination),
+            (rs1, rs2, destination),
             ((0 /*imm7*/ << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct3 << 12) | (0 /*imm7*/ << 7) | (opcode << 0))
         )
 
-        ENCODER_SPEC(U,
+        ENCODER_SPEC(U, emitImm20,
             TPL(<uint32_t opcode>),
+            TPL(<opcode>),
             (const RegisterGpr rd, const uint32_t imm20),
+            (rd, imm20),
             ((imm20 << 12) | (rd.code << 7) | (opcode << 0))
         )
 
-        ENCODER_SPEC(J,
+        ENCODER_SPEC(J, emitLabel1,
             TPL(<uint32_t opcode>),
+            TPL(<opcode>),
             (const RegisterGpr rd, const Label& destination),
+            (rd, destination),
             ((0 /*imm20*/ << 12) | (rd.code << 7) | (opcode << 0))
         )
 
 #define INSTRUCTION(Name, name, Type, ...) \
-        struct Name##Instruction final: public Encoder##Type##Emit<__VA_ARGS__> { using Encoder##Type##Emit::operator(); using Encoder##Type##Emit::Encoder##Type##Emit; };
+        struct Name##Instruction final: public Emit##Type<__VA_ARGS__> { using Emit##Type::operator();  using Emit##Type::operator Encoder; using Emit##Type::operator Encoder##Type; using Emit##Type::Emit##Type; };
 
 #include "emitfive-riscv-insn.inl"
 
 #undef INSTRUCTION
 
         struct Assembler {
-            using Label = Label;
-            using Encoder = Encoder;
-            using EncoderR = EncoderR;
-            using EncoderR4 = EncoderR4;
-            using EncoderI = EncoderI;
-            using EncoderS = EncoderS;
-            using EncoderB = EncoderB;
-            using EncoderU = EncoderU;
-            using EncoderJ = EncoderJ;
 
-            Assembler(uint32_t* dataBuffer) : buffer(dataBuffer) { }
+            Assembler(uint32_t* dataBuffer) { Context.buffer = new CodeBuffer(dataBuffer); }
+            ~Assembler() { delete Context.buffer; }
 
-            CodeBuffer buffer;
             #define REGISTER_DECL(n) \
-                static constexpr const RegisterGpr x##n {n, RS_64}
+                inline static constexpr const RegisterGpr x##n {n, RS_64}
 
             REGISTER_DECL(0); REGISTER_DECL(1); REGISTER_DECL(2); REGISTER_DECL(3);
             REGISTER_DECL(4); REGISTER_DECL(5); REGISTER_DECL(6); REGISTER_DECL(7);
@@ -207,7 +260,7 @@ namespace emitfive {
             #undef REGISTER_DECL
 
             #define REGISTER_ALIAS(name, n) \
-                static constexpr const RegisterGpr name = x##n
+                inline static constexpr const RegisterGpr name = x##n
 
             REGISTER_ALIAS(zero, 0);
             REGISTER_ALIAS(ra, 1);
@@ -248,7 +301,7 @@ namespace emitfive {
             #undef REGISTER_ALIAS
 
             #define REGISTER_DECL(n) \
-                static constexpr const RegisterFpr f##n {n, RS_32}
+                inline static constexpr const RegisterFpr f##n {n, RS_32}
 
             REGISTER_DECL(0); REGISTER_DECL(1); REGISTER_DECL(2); REGISTER_DECL(3);
             REGISTER_DECL(4); REGISTER_DECL(5); REGISTER_DECL(6); REGISTER_DECL(7);
@@ -262,7 +315,7 @@ namespace emitfive {
             #undef REGISTER_DECL
 
             #define REGISTER_ALIAS(name, n) \
-                static constexpr const RegisterFpr name = f##n
+                inline static constexpr const RegisterFpr name = f##n
 
             REGISTER_ALIAS(ft0, 0);
             REGISTER_ALIAS(ft1, 1);
@@ -306,11 +359,14 @@ namespace emitfive {
                 label.bound = true;
             }
 
-#define INSTRUCTION(Name, name, Type, ...) const Name##Instruction name { &buffer };
+            union {
+                EncoderContext Context;
+#define INSTRUCTION(Name, name, Type, ...) const Name##Instruction name;
 
 #include "emitfive-riscv-insn.inl"
 
 #undef INSTRUCTION
+            };
         };
 
 
@@ -386,14 +442,14 @@ namespace emitfive {
         struct MacroAssembler: Assembler {
             MacroAssembler(uint32_t* code): Assembler(code) { }
 
-            static constexpr MemSpecifier ptr{};
-            static constexpr MemSpecifier b{};
-            static constexpr MemSpecifier hw{};
-            static constexpr MemSpecifier w{};
-            static constexpr MemSpecifier qw{};
+            inline static constexpr MemSpecifier ptr{};
+            inline static constexpr MemSpecifier b{};
+            inline static constexpr MemSpecifier hw{};
+            inline static constexpr MemSpecifier w{};
+            inline static constexpr MemSpecifier qw{};
 
             const RetEncoder Ret{ (Assembler*)this };
             const AddEncoder Add{ (Assembler*)this };
         };
-    }
+        }
 }

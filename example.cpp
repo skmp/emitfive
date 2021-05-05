@@ -3,6 +3,9 @@
 
 #include "emitfive.h"
 
+using namespace emitfive;
+using namespace emitfive::riscv64;
+
 struct MyEmitter: emitfive::riscv64::Assembler {
     uint32_t codeBuffer[64];
     MyEmitter() : emitfive::riscv64::Assembler(codeBuffer) {
@@ -12,7 +15,7 @@ struct MyEmitter: emitfive::riscv64::Assembler {
     void FlexbileCodeGenerationTest(bool branch, const Encoder& insn) {
         if (branch) {
             Label dst;
-            insn(dst);
+            insn(x0, dst);
             bind(dst);
         } else {
             insn(x0, x1, x2);
@@ -24,7 +27,7 @@ struct MyEmitter: emitfive::riscv64::Assembler {
 
         // should generate runtime error
         Label dst;
-        insn(dst);
+        insn(x0, dst);
 
         insn(x0, x1, dst);
     }
@@ -81,10 +84,15 @@ struct MyEmitter: emitfive::riscv64::Assembler {
 
         EncoderRTest(add);
         EncoderRTest(sub);
+        
         BranchTest();
+        bool canencode = ((Encoder)add).CanEncodeR();
+        printf("Can encode %d\n", canencode);
         EncoderGenericTest(add);
+        
         FlexbileCodeGenerationTest(false, add);
-        FlexbileCodeGenerationTest(true, jal);
+        /*
+        FlexbileCodeGenerationTest(true, jal);*/
     }
 
     void Print() {
@@ -102,7 +110,7 @@ struct MyEmitter: emitfive::riscv64::Assembler {
         printf("1 + 3 = %d\n", jitAdd(1, 3));
     }
 };
-
+/*
 struct MyMacroEmitter: emitfive::riscv64::MacroAssembler {
     uint32_t codeBuffer[64];
 
@@ -135,9 +143,10 @@ struct MyMacroEmitter: emitfive::riscv64::MacroAssembler {
         printf("1 + 3 = %d\n", jitAdd(1, 3));
     }
 };
-
+*/
 int main() {
     printf("Test\n");
+    
     MyEmitter test;
 
     test.EmitSomething();
@@ -145,12 +154,12 @@ int main() {
     test.sub(test.x0, test.x2, test.x3);
     
     test.Print();
-
+/*
     MyMacroEmitter test2;
 
     test2.EmitSomething();
 
     test2.Print();
-    
+    */
     return 0;
 }
