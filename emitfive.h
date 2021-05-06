@@ -2,6 +2,7 @@
 #include <cassert>
 #include <functional>
 #include <memory.h>
+#include <type_traits>
 
 template <typename R, typename... Args>
 struct Caller;
@@ -189,25 +190,51 @@ namespace emitfive {
             const FuncD<void(const RegisterGpr rd, const uint32_t imm20)> emitImm20;
             const FuncD<bool()> CanEncodeR, CanEncodeR4, CanEncodeRF, CanEncodeR2F, CanEncodeR3F, CanEncodeI, CanEncodeIS32, CanEncodeIS64, CanEncodeS, CanEncodeB, CanEncodeU, CanEncodeJ;
 
-            inline Encoder() : 
-                emitLabel1(FuncS([](const RegisterGpr dst, const Label& destination) {
-                    assert("Invalid Encoding");
-                })),
-                emitLabel2(FuncS([](const RegisterGpr src1, const RegisterGpr src2, const Label& destination) {
-                    assert("Invalid Encoding");
-                })),
-                emitDst(FuncS([](const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2) {
-                    assert("Invalid Encoding");
-                })),
-                emitDst2(FuncS([](const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2, const RegisterGpr src3, const uint32_t rm) {
-                    assert("Invalid Encoding");
-                })),
-                emitImm(FuncS([](const RegisterGpr r1, const RegisterGpr r2, const uint32_t imm) {
-                    assert("Invalid Encoding");
-                })),
-                emitImm20(FuncS([](const RegisterGpr rd, const uint32_t imm20) {
-                    assert("Invalid Encoding");
-                })),
+            #define Template(Name, Arguments) \
+                typename T##Name
+
+            #define PARAM(Name, Arguments) \
+                const FuncS<T##Name>* Name
+
+            #define DEFAULT_DECL(Name, Arguments) \
+                inline static const auto Name##Unimplemented = FuncS([] Arguments { \
+                    printf("Invalid Encoding: " #Name ", " #Arguments "\n"); \
+                });
+
+            #define DEFAULT(Name, Arguments) \
+                Name(*Name)
+            
+            DEFAULT_DECL(emitLabel1, (const RegisterGpr dst, const Label& destination))
+            DEFAULT_DECL(emitLabel2, (const RegisterGpr src1, const RegisterGpr src2, const Label& destination))
+            DEFAULT_DECL(emitDst, (const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2))
+            DEFAULT_DECL(emitDst2, (const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2, const RegisterGpr src3, const uint32_t rm))
+            DEFAULT_DECL(emitImm, (const RegisterGpr r1, const RegisterGpr r2, const uint32_t imm))
+            DEFAULT_DECL(emitImm20, (const RegisterGpr rd, const uint32_t imm20))
+
+            template<
+                typename TemitLabel1,
+                typename TemitLabel2,
+                typename TemitDst,
+                typename TemitDst2,
+                typename TemitImm,
+                typename TemitImm20
+            >
+            inline Encoder(
+                PARAM(emitLabel1, (const RegisterGpr dst, const Label& destination)),
+                PARAM(emitLabel2, (const RegisterGpr src1, const RegisterGpr src2, const Label& destination)),
+                PARAM(emitDst, (const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2)),
+                PARAM(emitDst2, (const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2, const RegisterGpr src3, const uint32_t rm)),
+                PARAM(emitImm, (const RegisterGpr r1, const RegisterGpr r2, const uint32_t imm)),
+                PARAM(emitImm20, (const RegisterGpr rd, const uint32_t imm20))
+            ) : 
+
+                DEFAULT(emitLabel1, (const RegisterGpr dst, const Label& destination)),
+                DEFAULT(emitLabel2, (const RegisterGpr src1, const RegisterGpr src2, const Label& destination)),
+                DEFAULT(emitDst, (const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2)),
+                DEFAULT(emitDst2, (const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2, const RegisterGpr src3, const uint32_t rm)),
+                DEFAULT(emitImm, (const RegisterGpr r1, const RegisterGpr r2, const uint32_t imm)),
+                DEFAULT(emitImm20, (const RegisterGpr rd, const uint32_t imm20)),
+
                 CanEncodeR(FuncS([]{ return false; })),
                 CanEncodeR4(FuncS([]{ return false; })),
                 CanEncodeRF(FuncS([]{ return false; })),
@@ -238,7 +265,7 @@ namespace emitfive {
         struct Encoder##Type { \
             const FuncD<void Arguments> encoder; \
             inline void operator() Arguments const { encoder Values; }\
-            inline operator Encoder() const { return std::move(Encoder()); /*rv.CanEncode##Type = []() { return true; }; rv.GenericEncoderFunction = std::move([this] Arguments { encoder Values; });*/ } \
+            inline operator Encoder() const { return std::move(Encoder(&Encoder::emitLabel1Unimplemented, &Encoder::emitLabel2Unimplemented, &Encoder::emitDstUnimplemented, &Encoder::emitDst2Unimplemented, &Encoder::emitImmUnimplemented, &Encoder::emitImm20Unimplemented )); } \
             inline Encoder##Type(FuncD<void Arguments> encoder) : encoder(encoder) { } \
         }; \
         template Template \

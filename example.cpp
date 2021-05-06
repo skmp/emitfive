@@ -88,6 +88,10 @@ struct MyEmitter: emitfive::riscv64::Assembler {
         BranchTest();
         bool canencode = ((Encoder)add).CanEncodeR();
         printf("Can encode %d\n", canencode);
+        
+        Encoder encoded = add;
+        encoded(x0, x1, x2);
+        
         EncoderGenericTest(add);
         
         
