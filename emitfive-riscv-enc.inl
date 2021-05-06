@@ -1,6 +1,11 @@
-// TPL({UnimplementedOpcodes::emitLabel1Unimplemented, UnimplementedOpcodes::emitLabel2Unimplemented, UnimplementedOpcodes::emitDstUnimplemented, UnimplementedOpcodes::emitDst2Unimplemented, UnimplementedOpcodes::emitImmUnimplemented, UnimplementedOpcodes::emitImm20Unimplemented}),
-ENCODER_SPEC(R, 
-    TPL({UnimplementedOpcodes::emitLabel1Unimplemented, UnimplementedOpcodes::emitLabel2Unimplemented, encoder, UnimplementedOpcodes::emitDst2Unimplemented, UnimplementedOpcodes::emitImmUnimplemented, UnimplementedOpcodes::emitImm20Unimplemented}),
+#define emitDst TPL({UnimplementedOpcodes::emitLabel1Unimplemented, UnimplementedOpcodes::emitLabel2Unimplemented, encoder, UnimplementedOpcodes::emitDst2Unimplemented, UnimplementedOpcodes::emitImmUnimplemented, UnimplementedOpcodes::emitImm20Unimplemented})
+#define emitDst2 TPL({UnimplementedOpcodes::emitLabel1Unimplemented, UnimplementedOpcodes::emitLabel2Unimplemented, UnimplementedOpcodes::emitDstUnimplemented, encoder, UnimplementedOpcodes::emitImmUnimplemented, UnimplementedOpcodes::emitImm20Unimplemented})
+#define emitImm TPL({UnimplementedOpcodes::emitLabel1Unimplemented, UnimplementedOpcodes::emitLabel2Unimplemented, UnimplementedOpcodes::emitDstUnimplemented, UnimplementedOpcodes::emitDst2Unimplemented, encoder, UnimplementedOpcodes::emitImm20Unimplemented})
+#define emitImm20 TPL({UnimplementedOpcodes::emitLabel1Unimplemented, UnimplementedOpcodes::emitLabel2Unimplemented, UnimplementedOpcodes::emitDstUnimplemented, UnimplementedOpcodes::emitDst2Unimplemented, UnimplementedOpcodes::emitImmUnimplemented, encoder})
+#define emitLabel1 TPL({encoder, UnimplementedOpcodes::emitLabel2Unimplemented, UnimplementedOpcodes::emitDstUnimplemented, UnimplementedOpcodes::emitDst2Unimplemented, UnimplementedOpcodes::emitImmUnimplemented, UnimplementedOpcodes::emitImm20Unimplemented})
+#define emitLabel2 TPL({UnimplementedOpcodes::emitLabel1Unimplemented, encoder, UnimplementedOpcodes::emitDstUnimplemented, UnimplementedOpcodes::emitDst2Unimplemented, UnimplementedOpcodes::emitImmUnimplemented, UnimplementedOpcodes::emitImm20Unimplemented})
+
+ENCODER_SPEC(R, emitDst,
     TPL(<uint32_t funct7, uint32_t funct3, uint32_t opcode>),
     TPL(<funct7, funct3, opcode>),
     (const RegisterGpr rd, const RegisterGpr rs1, const RegisterGpr rs2),
@@ -8,8 +13,7 @@ ENCODER_SPEC(R,
     ((funct7 << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
 )
 
-ENCODER_SPEC(R4, 
-    TPL({UnimplementedOpcodes::emitLabel1Unimplemented, UnimplementedOpcodes::emitLabel2Unimplemented, UnimplementedOpcodes::emitDstUnimplemented, encoder, UnimplementedOpcodes::emitImmUnimplemented, UnimplementedOpcodes::emitImm20Unimplemented}),
+ENCODER_SPEC(R4, emitDst2,
     TPL(<uint32_t funct3, uint32_t opcode>),
     TPL(<funct3, opcode>),
     (const RegisterGpr rd, const RegisterGpr rs1, const RegisterGpr rs2, const RegisterGpr rs3, const uint32_t rm),
@@ -17,8 +21,7 @@ ENCODER_SPEC(R4,
     ((rs3.code << 27) | (rm << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
 )
 
-ENCODER_SPEC(RF,
-    TPL({UnimplementedOpcodes::emitLabel1Unimplemented, UnimplementedOpcodes::emitLabel2Unimplemented, UnimplementedOpcodes::emitDstUnimplemented, encoder, UnimplementedOpcodes::emitImmUnimplemented, UnimplementedOpcodes::emitImm20Unimplemented}),
+ENCODER_SPEC(RF, emitDst2,
     TPL(<uint32_t funct7, uint32_t opcode>),
     TPL(<funct7, opcode>),
     (const RegisterGpr rd, const RegisterGpr rs1, const RegisterGpr rs2, const RegisterGpr rs3, const uint32_t rm),
@@ -26,8 +29,7 @@ ENCODER_SPEC(RF,
     ((rs3.code << 27) | (rm << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct7 << 12) | (rd.code << 7) | (opcode << 0))
 )
 
-ENCODER_SPEC(R2F,
-    TPL({UnimplementedOpcodes::emitLabel1Unimplemented, UnimplementedOpcodes::emitLabel2Unimplemented, UnimplementedOpcodes::emitDstUnimplemented, encoder, UnimplementedOpcodes::emitImmUnimplemented, UnimplementedOpcodes::emitImm20Unimplemented}),
+ENCODER_SPEC(R2F,emitDst2,
     TPL(<uint32_t funct7, uint32_t funct5, uint32_t funct3, uint32_t opcode>),
     TPL(<funct7, funct5, funct3, opcode>),
     (const RegisterGpr rd, const RegisterGpr rs1, const RegisterGpr rs2, const RegisterGpr rs3, const uint32_t rm),
@@ -35,8 +37,7 @@ ENCODER_SPEC(R2F,
     ((rs3.code << 27) | (rm << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
 )
 
-ENCODER_SPEC(R3F,
-    TPL({UnimplementedOpcodes::emitLabel1Unimplemented, UnimplementedOpcodes::emitLabel2Unimplemented, UnimplementedOpcodes::emitDstUnimplemented, encoder, UnimplementedOpcodes::emitImmUnimplemented, UnimplementedOpcodes::emitImm20Unimplemented}),
+ENCODER_SPEC(R3F, emitDst2,
     TPL(<uint32_t funct7, uint32_t funct5, uint32_t opcode>),
     TPL(<funct7, funct5, opcode>),
     (const RegisterGpr rd, const RegisterGpr rs1, const RegisterGpr rs2, const RegisterGpr rs3, const uint32_t rm),
@@ -44,8 +45,7 @@ ENCODER_SPEC(R3F,
     ((rs3.code << 27) | (rm << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct5 << 12) | (rd.code << 7) | (opcode << 0))
 )
 
-ENCODER_SPEC(I,
-    TPL({UnimplementedOpcodes::emitLabel1Unimplemented, UnimplementedOpcodes::emitLabel2Unimplemented, UnimplementedOpcodes::emitDstUnimplemented, UnimplementedOpcodes::emitDst2Unimplemented, encoder, UnimplementedOpcodes::emitImm20Unimplemented}),
+ENCODER_SPEC(I, emitImm,
     TPL(<uint32_t funct3, uint32_t opcode>),
     TPL(<funct3, opcode>),
     (const RegisterGpr rd, const RegisterGpr rs1, const uint32_t imm12),
@@ -53,8 +53,7 @@ ENCODER_SPEC(I,
     ((imm12 << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
 )
 
-ENCODER_SPEC(IS32,
-    TPL({UnimplementedOpcodes::emitLabel1Unimplemented, UnimplementedOpcodes::emitLabel2Unimplemented, UnimplementedOpcodes::emitDstUnimplemented, UnimplementedOpcodes::emitDst2Unimplemented, encoder, UnimplementedOpcodes::emitImm20Unimplemented}),
+ENCODER_SPEC(IS32, emitImm,
     TPL(<uint32_t funct7, uint32_t funct3, uint32_t opcode>),
     TPL(<funct7, funct3, opcode>),
     (const RegisterGpr rd, const RegisterGpr rs1, const uint32_t imm5),
@@ -62,8 +61,7 @@ ENCODER_SPEC(IS32,
     ((funct7 << 25) | (imm5 << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
 )
 
-ENCODER_SPEC(IS64,
-    TPL({UnimplementedOpcodes::emitLabel1Unimplemented, UnimplementedOpcodes::emitLabel2Unimplemented, UnimplementedOpcodes::emitDstUnimplemented, UnimplementedOpcodes::emitDst2Unimplemented, encoder, UnimplementedOpcodes::emitImm20Unimplemented}),
+ENCODER_SPEC(IS64, emitImm,
     TPL(<uint32_t funct6, uint32_t funct3, uint32_t opcode>),
     TPL(<funct6, funct3, opcode>),
     (const RegisterGpr rd, const RegisterGpr rs1, const uint32_t imm6),
@@ -71,8 +69,7 @@ ENCODER_SPEC(IS64,
     ((funct6 << 26) | (imm6 << 20) | (rs1.code << 15) | (funct3 << 12) | (rd.code << 7) | (opcode << 0))
 )
 
-ENCODER_SPEC(S,
-    TPL({UnimplementedOpcodes::emitLabel1Unimplemented, UnimplementedOpcodes::emitLabel2Unimplemented, UnimplementedOpcodes::emitDstUnimplemented, UnimplementedOpcodes::emitDst2Unimplemented, encoder, UnimplementedOpcodes::emitImm20Unimplemented}),
+ENCODER_SPEC(S, emitImm,
     TPL(<uint32_t funct3, uint32_t opcode>),
     TPL(<funct3, opcode>),
     (const RegisterGpr rs1, const RegisterGpr rs2, const uint32_t imm7),
@@ -80,8 +77,7 @@ ENCODER_SPEC(S,
     ((imm7 << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct3 << 12) | (imm7 << 7) | (opcode << 0))
 )
 
-ENCODER_SPEC(B,
-    TPL({UnimplementedOpcodes::emitLabel1Unimplemented, encoder, UnimplementedOpcodes::emitDstUnimplemented, UnimplementedOpcodes::emitDst2Unimplemented, UnimplementedOpcodes::emitImmUnimplemented, UnimplementedOpcodes::emitImm20Unimplemented}),
+ENCODER_SPEC(B, emitLabel2,
     TPL(<uint32_t funct3, uint32_t opcode>),
     TPL(<funct3, opcode>),
     (const RegisterGpr rs1, const RegisterGpr rs2, const Label& destination),
@@ -89,8 +85,7 @@ ENCODER_SPEC(B,
     ((0 /*imm7*/ << 25) | (rs2.code << 20) | (rs1.code << 15) | (funct3 << 12) | (0 /*imm7*/ << 7) | (opcode << 0))
 )
 
-ENCODER_SPEC(U,
-    TPL({UnimplementedOpcodes::emitLabel1Unimplemented, UnimplementedOpcodes::emitLabel2Unimplemented, UnimplementedOpcodes::emitDstUnimplemented, UnimplementedOpcodes::emitDst2Unimplemented, UnimplementedOpcodes::emitImmUnimplemented, encoder}),
+ENCODER_SPEC(U, emitImm20,
     TPL(<uint32_t opcode>),
     TPL(<opcode>),
     (const RegisterGpr rd, const uint32_t imm20),
@@ -98,11 +93,17 @@ ENCODER_SPEC(U,
     ((imm20 << 12) | (rd.code << 7) | (opcode << 0))
 )
 
-ENCODER_SPEC(J,
-    TPL({encoder, UnimplementedOpcodes::emitLabel2Unimplemented, UnimplementedOpcodes::emitDstUnimplemented, UnimplementedOpcodes::emitDst2Unimplemented, UnimplementedOpcodes::emitImmUnimplemented, UnimplementedOpcodes::emitImm20Unimplemented}),
+ENCODER_SPEC(J, emitLabel1,
     TPL(<uint32_t opcode>),
     TPL(<opcode>),
     (const RegisterGpr rd, const Label& destination),
     (rd, destination),
     ((0 /*imm20*/ << 12) | (rd.code << 7) | (opcode << 0))
 )
+
+#undef emitDst
+#undef emitDst2
+#undef emitImm
+#undef emitImm20
+#undef emitLabel1
+#undef emitLabel2
