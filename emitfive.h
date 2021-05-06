@@ -224,7 +224,7 @@ namespace emitfive {
                 typename T##Name
 
             #define PARAM(Name, Arguments) \
-                const FuncD<void Arguments> Name
+                const FuncD<void Arguments>& Name
 
 
 
