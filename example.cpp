@@ -27,9 +27,19 @@ struct MyEmitter: emitfive::riscv64::Assembler {
 
         // should generate runtime error
         Label dst;
-        insn(x0, dst);
+        try {
+            insn(x0, dst);
+            abort();
+        } catch (InvalidEncoderUsed<void (emitfive::RegisterGpr, emitfive::Label const&)> ex) {
+            printf("Expected failure happened <<%s>>\n", ex.message);
+        }
 
-        insn(x0, x1, dst);
+        try {
+            insn(x0, x1, dst);
+            abort();
+        } catch (InvalidEncoderUsed<void (emitfive::RegisterGpr, emitfive::RegisterGpr, emitfive::Label const&)> ex) {
+            printf("Expected failure happened: <<%s>>\n", ex.message);
+        }
     }
 
     void EncoderRTest(const EncoderR& insn) {
@@ -86,8 +96,6 @@ struct MyEmitter: emitfive::riscv64::Assembler {
         EncoderRTest(sub);
         
         BranchTest();
-        bool canencode = ((Encoder)add).CanEncodeR();
-        printf("Can encode %d\n", canencode);
         
         Encoder encoded = add;
         encoded(x0, x1, x2);
@@ -95,7 +103,7 @@ struct MyEmitter: emitfive::riscv64::Assembler {
         EncoderGenericTest(add);
         
         
-        FlexbileCodeGenerationTest(false, add);
+        FlexbileCodeGenerationTest(false, add); 
         
         FlexbileCodeGenerationTest(true, jal);
     }
