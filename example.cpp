@@ -12,7 +12,7 @@ struct MyEmitter: emitfive::riscv64::Assembler {
 
     }
 
-    void FlexbileCodeGenerationTest(bool branch, const Encoder& insn) {
+    void __attribute__ ((noinline)) FlexbileCodeGenerationTest(bool branch, const Encoder& insn) {
         if (branch) {
             Label dst;
             insn(x0, dst);
@@ -81,7 +81,7 @@ struct MyEmitter: emitfive::riscv64::Assembler {
         sub(x1, x2, x3);
         //mul(x31, x8, x11);
         //div(x22, x12, x7);
-
+        
         EncoderRTest(add);
         EncoderRTest(sub);
         
@@ -90,12 +90,13 @@ struct MyEmitter: emitfive::riscv64::Assembler {
         printf("Can encode %d\n", canencode);
         EncoderGenericTest(add);
         
+        
         FlexbileCodeGenerationTest(false, add);
-        /*
-        FlexbileCodeGenerationTest(true, jal);*/
+        
+        FlexbileCodeGenerationTest(true, jal);
     }
 
-    void Print() {
+    inline void Print() {
         for (uint32_t v : codeBuffer) {
             printf("%08X ", v);
         }
@@ -107,7 +108,7 @@ struct MyEmitter: emitfive::riscv64::Assembler {
 
         // TODO: Flush Cache
         int (*jitAdd)(int, int) = reinterpret_cast<int (*)(int, int)>(codeBuffer);
-        printf("1 + 3 = %d\n", jitAdd(1, 3));
+        //printf("1 + 3 = %d\n", jitAdd(1, 3));
     }
 };
 /*
@@ -144,11 +145,10 @@ struct MyMacroEmitter: emitfive::riscv64::MacroAssembler {
     }
 };
 */
-int main() {
-    printf("Test\n");
-    
+int main() {  
     MyEmitter test;
 
+    EncoderR encoderR = test.add;
     test.EmitSomething();
 
     test.sub(test.x0, test.x2, test.x3);

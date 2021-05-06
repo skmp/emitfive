@@ -1,6 +1,111 @@
 #include <cstdint>
 #include <cassert>
 #include <functional>
+#include <memory.h>
+
+template <typename R, typename... Args>
+struct Caller;
+
+template <typename T>
+struct CallerM { };
+
+
+template <typename R, typename... Args>
+struct FuncD;
+
+template <typename T, typename... Args>
+struct Func;
+
+template <typename T>
+struct FuncS;
+
+template <typename... Args>
+struct DecomposeArgs;
+
+template <typename R, typename... Args>
+struct DecomposeFn;
+
+template <typename Rt, typename... Argst>
+struct DecomposeFn<Rt(Argst...)> {
+    typedef Rt R;
+    typedef DecomposeArgs<Argst...> Args;
+};
+
+template <typename T>
+struct DecomposeMFn;
+
+template <typename Ct, typename Rt, typename... Argst>
+struct DecomposeMFn<Rt(Ct::*)(Argst...) const> {
+    typedef Ct C;
+    typedef Rt R;
+    typedef DecomposeArgs<Argst...> Args;
+};
+
+template <typename R, typename... Args>
+struct Caller<R(DecomposeArgs<Args...>)> {
+    virtual R operator ()(Args... args) const { assert(false); };
+};
+
+struct BaseClass;
+
+template <typename C, typename R, typename... Args>
+struct CallerM<R(C::*)(DecomposeArgs<Args...>) const> {
+    static const R Objectify(const void* that, Args... args) {
+        return reinterpret_cast<const C*>(that)->operator()(args...);
+    }
+};
+
+template <typename C, typename R, typename... Args>
+struct CallerM<R(C::*)(Args...) const> : CallerM<R(C::*)(DecomposeArgs<Args...>) const> {
+
+};
+
+template <typename R, typename... Args>
+struct FuncD<R(Args...)> {
+    union {
+        uint8_t Storage[32];
+    };
+
+    const R(*Objectifier)(const void* that, Args... args);
+
+    template<typename T>
+    inline FuncD(const FuncS<T>& Fn) : Objectifier(&FuncS<T>::VTableType::Objectify) { 
+        static_assert( sizeof(Fn.Fn) < sizeof(Storage));
+        memcpy(Storage, &Fn.Fn, sizeof(Fn.Fn)); 
+    }
+
+    inline R operator ()(Args... args) const {
+        return Objectifier(&Storage[0], args...);
+    }
+};
+
+template <typename T, typename... Argst>
+struct Func<T, DecomposeArgs<Argst...>>: CallerM<decltype(&T::operator())>  {
+    typedef CallerM<decltype(&T::operator())> VTableType;
+    typedef typename DecomposeMFn<decltype(&T::operator())>::R R;
+    typedef typename DecomposeMFn<decltype(&T::operator())>::Args Args;
+
+    inline static constexpr const size_t Size = sizeof(T);
+
+    const T Fn;
+
+    Func(T Fn) : Fn(Fn) { }
+
+    inline virtual R operator ()(Argst... args) {
+        return Fn(args...);
+    }
+
+    inline operator const FuncD<R, Argst...>&() {
+        return FuncD<R, Argst...>();
+    }
+};
+
+template <typename T>
+struct FuncS: Func<T, typename DecomposeMFn<decltype(&T::operator())>::Args>{
+    FuncS(T Fn) : Func<T, typename DecomposeMFn<decltype(&T::operator())>::Args>(Fn) { }
+    typedef typename Func<T, typename DecomposeMFn<decltype(&T::operator())>::Args>::VTableType VTableType;
+ };
+
 
 namespace emitfive {
     enum RegisterClass {
@@ -76,35 +181,45 @@ namespace emitfive {
 
        
         struct Encoder {
-            const std::function<void(const RegisterGpr dst, const Label& destination)> emitLabel1;
-            const std::function<void(const RegisterGpr src1, const RegisterGpr src2, const Label& destination)> emitLabel2;
-            const std::function<void(const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2)> emitDst;
-            const std::function<void(const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2, const RegisterGpr src3, const uint32_t rm)> emitDst2;
-            const std::function<void(const RegisterGpr r1, const RegisterGpr r2, const uint32_t imm)> emitImm;
-            const std::function<void(const RegisterGpr rd, const uint32_t imm20)> emitImm20;
-            const std::function<bool()> CanEncodeR, CanEncodeR4, CanEncodeRF, CanEncodeR2F, CanEncodeR3F, CanEncodeI, CanEncodeIS32, CanEncodeIS64, CanEncodeS, CanEncodeB, CanEncodeU, CanEncodeJ;
+            const FuncD<void(const RegisterGpr dst, const Label& destination)> emitLabel1;
+            const FuncD<void(const RegisterGpr src1, const RegisterGpr src2, const Label& destination)> emitLabel2;
+            const FuncD<void(const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2)> emitDst;
+            const FuncD<void(const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2, const RegisterGpr src3, const uint32_t rm)> emitDst2;
+            const FuncD<void(const RegisterGpr r1, const RegisterGpr r2, const uint32_t imm)> emitImm;
+            const FuncD<void(const RegisterGpr rd, const uint32_t imm20)> emitImm20;
+            const FuncD<bool()> CanEncodeR, CanEncodeR4, CanEncodeRF, CanEncodeR2F, CanEncodeR3F, CanEncodeI, CanEncodeIS32, CanEncodeIS64, CanEncodeS, CanEncodeB, CanEncodeU, CanEncodeJ;
 
-            inline Encoder() : emitLabel1([](const RegisterGpr dst, const Label& destination) {
+            inline Encoder() : 
+                emitLabel1(FuncS([](const RegisterGpr dst, const Label& destination) {
                     assert("Invalid Encoding");
-                }),
-                emitLabel2([](const RegisterGpr src1, const RegisterGpr src2, const Label& destination) {
+                })),
+                emitLabel2(FuncS([](const RegisterGpr src1, const RegisterGpr src2, const Label& destination) {
                     assert("Invalid Encoding");
-                }),
-                emitDst([](const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2) {
+                })),
+                emitDst(FuncS([](const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2) {
                     assert("Invalid Encoding");
-                }),
-                CanEncodeR([]{ return false; }),
-                CanEncodeR4([]{ return false; }),
-                CanEncodeRF([]{ return false; }),
-                CanEncodeR2F([]{ return false; }),
-                CanEncodeR3F([]{ return false; }),
-                CanEncodeI([]{ return false; }),
-                CanEncodeIS32([]{ return false; }),
-                CanEncodeIS64([]{ return false; }),
-                CanEncodeS([]{ return false; }),
-                CanEncodeB([]{ return false; }),
-                CanEncodeU([]{ return false; }),
-                CanEncodeJ([]{ return false; })
+                })),
+                emitDst2(FuncS([](const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2, const RegisterGpr src3, const uint32_t rm) {
+                    assert("Invalid Encoding");
+                })),
+                emitImm(FuncS([](const RegisterGpr r1, const RegisterGpr r2, const uint32_t imm) {
+                    assert("Invalid Encoding");
+                })),
+                emitImm20(FuncS([](const RegisterGpr rd, const uint32_t imm20) {
+                    assert("Invalid Encoding");
+                })),
+                CanEncodeR(FuncS([]{ return false; })),
+                CanEncodeR4(FuncS([]{ return false; })),
+                CanEncodeRF(FuncS([]{ return false; })),
+                CanEncodeR2F(FuncS([]{ return false; })),
+                CanEncodeR3F(FuncS([]{ return false; })),
+                CanEncodeI(FuncS([]{ return false; })),
+                CanEncodeIS32(FuncS([]{ return false; })),
+                CanEncodeIS64(FuncS([]{ return false; })),
+                CanEncodeS(FuncS([]{ return false; })),
+                CanEncodeB(FuncS([]{ return false; })),
+                CanEncodeU(FuncS([]{ return false; })),
+                CanEncodeJ(FuncS([]{ return false; }))
             {
                
             }
@@ -121,18 +236,18 @@ namespace emitfive {
 
 #define ENCODER_SPEC(Type, GenericEncoderFunction, Template, Instantiation, Arguments, Values, Encode) \
         struct Encoder##Type { \
-            const std::function<void Arguments> encoder; \
+            const FuncD<void Arguments> encoder; \
             inline void operator() Arguments const { encoder Values; }\
-            inline operator Encoder() const { const auto rv = Encoder(); /*rv.CanEncode##Type = []() { return true; }; rv.GenericEncoderFunction = std::move([this] Arguments { encoder Values; });*/ return rv; } \
-            inline Encoder##Type(std::function<void Arguments> encoder) : encoder(encoder) { } \
+            inline operator Encoder() const { return std::move(Encoder()); /*rv.CanEncode##Type = []() { return true; }; rv.GenericEncoderFunction = std::move([this] Arguments { encoder Values; });*/ } \
+            inline Encoder##Type(FuncD<void Arguments> encoder) : encoder(encoder) { } \
         }; \
         template Template \
         struct Emit##Type: EncoderContext { \
             inline void operator() Arguments const { \
                 buffer->Emit32 Encode; \
             } \
-            inline operator Encoder##Type() const  { auto Buffer = buffer; return Encoder##Type([Buffer] Arguments { Buffer->Emit32 Encode; }); } \
-            inline operator Encoder() const { return this->operator Encoder##Type(); } \
+            inline operator Encoder##Type() const  { auto Buffer = buffer; return std::move(Encoder##Type(FuncS([Buffer] Arguments { Buffer->Emit32 Encode; }))); } \
+            inline operator Encoder() const { auto Buffer = buffer; return std::move(Encoder##Type(FuncS([Buffer] Arguments { Buffer->Emit32 Encode; }))); } \
         };
 
 #define TPL(...) __VA_ARGS__    
