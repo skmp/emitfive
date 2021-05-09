@@ -24,7 +24,7 @@ struct MyEmitter: emitfive::riscv64::Assembler {
 
     void EncoderGenericTest(const Encoder& insn) {
         insn(x3, x0, x3);
-
+    
         // should generate runtime error
         Label dst;
         try {
@@ -161,6 +161,7 @@ int main() {
     MyEmitter test;
 
     EncoderR encoderR = test.add;
+    encoderR(test.x0, test.x2, test.x3);
     test.EmitSomething();
 
     test.sub(test.x0, test.x2, test.x3);

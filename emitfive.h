@@ -5,130 +5,11 @@
 #include <type_traits>
 #include <bit>
 
-template <typename R, typename... Args>
-struct Caller;
-
-template <typename T>
-struct CallerM { };
-
-
-template <typename R, typename... Args>
-struct FuncD;
-
-template <typename T, typename... Args>
-struct Func;
-
-template <typename T>
-struct FuncS;
-
-template <typename... Args>
-struct DecomposeArgs;
-
-template <typename R, typename... Args>
-struct DecomposeFn;
-
-template <typename Rt, typename... Argst>
-struct DecomposeFn<Rt(Argst...)> {
-    typedef Rt R;
-    typedef DecomposeArgs<Argst...> Args;
-};
-
-template <typename T>
-struct DecomposeMFn;
-
-template <typename Ct, typename Rt, typename... Argst>
-struct DecomposeMFn<Rt(Ct::*)(Argst...) const> {
-    typedef Ct C;
-    typedef Rt R;
-    typedef DecomposeArgs<Argst...> Args;
-};
-
-template <typename R, typename... Args>
-struct Caller<R(DecomposeArgs<Args...>)> {
-    virtual R operator ()(Args... args) const { assert(false); };
-};
-
-struct BaseClass;
-
-template <typename C, typename R, typename... Args>
-struct CallerM<R(C::*)(DecomposeArgs<Args...>) const> {
-    static const R Objectify(const void* that, Args... args) {
-        return reinterpret_cast<const C*>(that)->operator()(args...);
-    }
-};
-
-template <typename C, typename R, typename... Args>
-struct CallerM<R(C::*)(Args...) const> : CallerM<R(C::*)(DecomposeArgs<Args...>) const> {
-
-};
-
-template <typename R, typename... Args>
-struct FuncD<R(Args...)> {
-    template<size_t Len>
-    struct Storage {
-        uint8_t data[Len];
-    };
-
-    #define CTOR_S(n) 
-    union {
-        const Storage<1> storage1;
-        const Storage<8> storage8;
-    };
-    #undef CTOR_S
-    
-
-    const R(*Objectifier)(const void* that, Args... args);
-
-    template<typename T>
-    requires (sizeof(T) == 1)
-    inline constexpr FuncD(const FuncS<T>& Fn):
-    Objectifier(&FuncS<T>::VTableType::Objectify),
-    storage1(__builtin_bit_cast(Storage<sizeof(T)>, Fn.Fn)) {
-        static_assert( sizeof(T) == sizeof(storage1));
-    }
-
-    template<typename T>
-    requires (sizeof(T) == 8)
-    inline constexpr FuncD(const FuncS<T>& Fn):
-    Objectifier(&FuncS<T>::VTableType::Objectify),
-    storage8(__builtin_bit_cast(Storage<sizeof(T)>, Fn.Fn)) {
-        static_assert( sizeof(T) == sizeof(storage8));
-    }
-    
-    inline R operator ()(Args... args) const {
-        return Objectifier(&storage1.data[0], args...);
-    }
-};
-
-template <typename T, typename... Argst>
-struct Func<T, DecomposeArgs<Argst...>>: CallerM<decltype(&T::operator())>  {
-    typedef CallerM<decltype(&T::operator())> VTableType;
-    typedef typename DecomposeMFn<decltype(&T::operator())>::R R;
-    typedef typename DecomposeMFn<decltype(&T::operator())>::Args Args;
-
-    inline static constexpr const size_t Size = sizeof(T);
-
-    const T Fn;
-
-    constexpr Func(T Fn) : Fn(Fn) { }
-
-    inline virtual R operator ()(Argst... args) {
-        return Fn(args...);
-    }
-
-    inline operator const FuncD<R, Argst...>&() {
-        return FuncD<R, Argst...>();
-    }
-};
-
-template <typename T>
-struct FuncS: Func<T, typename DecomposeMFn<decltype(&T::operator())>::Args>{
-    constexpr FuncS(T Fn) : Func<T, typename DecomposeMFn<decltype(&T::operator())>::Args>(Fn) { }
-    typedef typename Func<T, typename DecomposeMFn<decltype(&T::operator())>::Args>::VTableType VTableType;
- };
+#define always_inline __attribute__((always_inline)) 
 
 struct InvalidEncodingUsedMessage {
     const char* message;
+    constexpr InvalidEncodingUsedMessage(const char message[]) : message(message) { }
 };
 
 template<typename... Args>
@@ -136,7 +17,7 @@ struct InvalidEncoderUsed;
 
 template<typename... Args>
 struct InvalidEncoderUsed<void(Args...)>: InvalidEncodingUsedMessage {
-    
+    using InvalidEncodingUsedMessage::InvalidEncodingUsedMessage;
 };
 
 namespace emitfive {
@@ -160,16 +41,16 @@ namespace emitfive {
     };
 
     struct RegisterGpr: Register {
-        inline constexpr RegisterGpr(uint8_t code, uint32_t size): Register { code, RC_GPR, size } { }
-        inline constexpr RegisterGpr(const RegisterGpr& other): Register { other.code, other.type, other.size } { }
+        always_inline constexpr RegisterGpr(uint8_t code, uint32_t size): Register { code, RC_GPR, size } { }
+        always_inline constexpr RegisterGpr(const RegisterGpr& other): Register { other.code, other.type, other.size } { }
 
-        inline constexpr RegisterGpr w() const { return RegisterGpr { code, RS_32 }; }
-        inline constexpr RegisterGpr d() const { return RegisterGpr { code, RS_64 }; }
+        always_inline constexpr RegisterGpr w() const { return RegisterGpr { code, RS_32 }; }
+        always_inline constexpr RegisterGpr d() const { return RegisterGpr { code, RS_64 }; }
     };
 
     struct RegisterFpr: Register {
-        constexpr RegisterFpr(uint8_t code, uint32_t size): Register { code, RC_FPR, size } { }
-        constexpr RegisterFpr(const RegisterFpr& other): Register { other.code, other.type, other.size } { }
+        always_inline constexpr RegisterFpr(uint8_t code, uint32_t size): Register { code, RC_FPR, size } { }
+        always_inline constexpr RegisterFpr(const RegisterFpr& other): Register { other.code, other.type, other.size } { }
     };
 
     struct Label {
@@ -204,34 +85,30 @@ namespace emitfive {
     };
 
     struct EncoderContext {
-        CodeBuffer* buffer;
+        CodeBuffer* const buffer;
 
-        EncoderContext(CodeBuffer* buffer): buffer(buffer) { }
+        EncoderContext(CodeBuffer* const buffer): buffer(buffer) { }
     };
 
     namespace riscv64 {
 
        
-        struct Encoder {
-            const FuncD<void(const RegisterGpr dst, const Label& destination)> emitLabel1;
-            const FuncD<void(const RegisterGpr src1, const RegisterGpr src2, const Label& destination)> emitLabel2;
-            const FuncD<void(const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2)> emitDst;
-            const FuncD<void(const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2, const RegisterGpr src3, const uint32_t rm)> emitDst2;
-            const FuncD<void(const RegisterGpr r1, const RegisterGpr r2, const uint32_t imm)> emitImm;
-            const FuncD<void(const RegisterGpr rd, const uint32_t imm20)> emitImm20;
-
-            #define Template(Name, Arguments) \
-                typename T##Name
+        struct EncoderFunctions {
+            void(* const emitLabel1)(const EncoderContext* context, const RegisterGpr dst, const Label& destination);
+            void(* const emitLabel2)(const EncoderContext* context, const RegisterGpr src1, const RegisterGpr src2, const Label& destination);
+            void(* const emitDst)(const EncoderContext* context, const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2);
+            void(* const emitDst2)(const EncoderContext* context, const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2, const RegisterGpr src3, const uint32_t rm);
+            void(* const emitImm)(const EncoderContext* context, const RegisterGpr r1, const RegisterGpr r2, const uint32_t imm);
+            void(* const emitImm20)(const EncoderContext* context, const RegisterGpr rd, const uint32_t imm20);
 
             #define PARAM(Name, Arguments) \
-                const FuncD<void Arguments>& Name
-
+                const decltype(Name) & Name
 
 
             #define DEFAULT(Name, Arguments) \
                 Name(Name)
 
-            inline constexpr Encoder(
+            inline constexpr EncoderFunctions(
                 PARAM(emitLabel1, (const RegisterGpr dst, const Label& destination)),
                 PARAM(emitLabel2, (const RegisterGpr src1, const RegisterGpr src2, const Label& destination)),
                 PARAM(emitDst, (const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2)),
@@ -249,13 +126,19 @@ namespace emitfive {
             {
                
             }
+        };
 
-            inline void operator()(const RegisterGpr dst, const Label& destination) const { emitLabel1(dst, destination); }
-            inline void operator()(const RegisterGpr src1, const RegisterGpr src2, const Label& destination) const { emitLabel2(src1, src2, destination); }
-            inline void operator()(const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2) const { emitDst(dst, src1, src2); }
-            inline void operator()(const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2, const RegisterGpr src3, const uint32_t rm) const { emitDst2(dst, src1, src2, src3, rm); }
-            inline void operator()(const RegisterGpr r1, const RegisterGpr r2, const uint32_t imm) const { emitImm(r1, r2, imm); }        
-            inline void operator()(const RegisterGpr rd, const uint32_t imm20) const { emitImm20(rd, imm20); }            
+        struct Encoder {
+            const EncoderFunctions* const encoder;
+            const EncoderContext* const context;
+            constexpr Encoder(const EncoderFunctions* const encoder, const EncoderContext* const context) : encoder(encoder), context(context) { }
+
+            always_inline constexpr void operator()(const RegisterGpr dst, const Label& destination) const { encoder->emitLabel1(context, dst, destination); }
+            always_inline constexpr void operator()(const RegisterGpr src1, const RegisterGpr src2, const Label& destination) const { encoder->emitLabel2(context, src1, src2, destination); }
+            always_inline constexpr void operator()(const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2) const { encoder->emitDst(context, dst, src1, src2); }
+            always_inline constexpr void operator()(const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2, const RegisterGpr src3, const uint32_t rm) const { encoder->emitDst2(context, dst, src1, src2, src3, rm); }
+            always_inline constexpr void operator()(const RegisterGpr r1, const RegisterGpr r2, const uint32_t imm) const { encoder->emitImm(context, r1, r2, imm); }
+            always_inline constexpr void operator()(const RegisterGpr rd, const uint32_t imm20) const { encoder->emitImm20(context, rd, imm20); }
         };
 
         #define TPL(...) __VA_ARGS__
@@ -263,50 +146,49 @@ namespace emitfive {
 
         struct UnimplementedOpcodes {
             #define DEFAULT_DECL(Name, Arguments) \
-            inline static const auto Name##Unimplemented = FuncD<void Arguments>(FuncS([] Arguments { \
+            static constexpr decltype(EncoderFunctions::Name) Name##Unimplemented = [] Arguments { \
                 throw InvalidEncoderUsed<void Arguments> { "Invalid Encoder: " #Name ", " #Arguments }; \
-            }));
+            };
 
             
-            DEFAULT_DECL(emitLabel1, (const RegisterGpr dst, const Label& destination))
-            DEFAULT_DECL(emitLabel2, (const RegisterGpr src1, const RegisterGpr src2, const Label& destination))
-            DEFAULT_DECL(emitDst, (const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2))
-            DEFAULT_DECL(emitDst2, (const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2, const RegisterGpr src3, const uint32_t rm))
-            DEFAULT_DECL(emitImm, (const RegisterGpr r1, const RegisterGpr r2, const uint32_t imm))
-            DEFAULT_DECL(emitImm20, (const RegisterGpr rd, const uint32_t imm20))
-
-            inline static const Encoder unimplementedEncoder { UnimplementedOpcodes::emitLabel1Unimplemented, UnimplementedOpcodes::emitLabel2Unimplemented, UnimplementedOpcodes::emitDstUnimplemented, UnimplementedOpcodes::emitDst2Unimplemented, UnimplementedOpcodes::emitImmUnimplemented, UnimplementedOpcodes::emitImm20Unimplemented };
+            DEFAULT_DECL(emitLabel1, (const EncoderContext* const context, const RegisterGpr dst, const Label& destination))
+            DEFAULT_DECL(emitLabel2, (const EncoderContext* const context, const RegisterGpr src1, const RegisterGpr src2, const Label& destination))
+            DEFAULT_DECL(emitDst, (const EncoderContext* const context, const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2))
+            DEFAULT_DECL(emitDst2, (const EncoderContext* const context, const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2, const RegisterGpr src3, const uint32_t rm))
+            DEFAULT_DECL(emitImm, (const EncoderContext* const context, const RegisterGpr r1, const RegisterGpr r2, const uint32_t imm))
+            DEFAULT_DECL(emitImm20, (const EncoderContext* const context, const RegisterGpr rd, const uint32_t imm20))
         };
 
 
-#define ENCODER_SPEC(Type, GenericEncoderFunction, Template, Instantiation, Arguments, Values, Encode) \
+#define ENCODER_SPEC(Type, GenericEncoderFunction, Template, Instantiation, Arguments, ContextArguments, Values, Encode) \
         struct Encoder##Type { \
-            const FuncD<void Arguments> encoder; \
-            const Encoder GenericEncoder GenericEncoderFunction; \
-            inline void operator() Arguments const { encoder Values; }\
-            inline operator const Encoder() const { return GenericEncoder; } \
-            inline constexpr Encoder##Type(FuncD<void Arguments> encoder) : encoder(encoder) { } \
+            const EncoderContext* const context; \
+            const EncoderFunctions * const GenericEncoderFunctions; \
+            void(*const encoder) ContextArguments; \
+            always_inline constexpr void operator() Arguments const { encoder Values; }\
+            always_inline constexpr operator const Encoder() const { return { GenericEncoderFunctions, context }; } \
+            always_inline constexpr Encoder##Type(decltype(context) context, decltype(GenericEncoderFunctions) GenericEncoderFunctions, decltype(encoder) encoder) : context(context), GenericEncoderFunctions(GenericEncoderFunctions), encoder(encoder) { } \
         }; \
         template Template \
         struct Emit##Type: EncoderContext { \
-            inline void operator() Arguments const { \
-                buffer->Emit32 Encode; \
-            } \
-            inline operator Encoder##Type() const  { auto Buffer = buffer; return std::move(Encoder##Type(FuncS([Buffer] Arguments { Buffer->Emit32 Encode; }))); } \
-            inline operator const Encoder() const { auto Buffer = buffer; return std::move(Encoder##Type(FuncS([Buffer] Arguments { Buffer->Emit32 Encode; }))); } \
+            always_inline void operator() Arguments const { buffer->Emit32 Encode; } \
+            always_inline static void Emit ContextArguments { context->buffer->Emit32 Encode; } \
+            static constexpr EncoderFunctions GenericEncoderFunctions GenericEncoderFunction; \
+            always_inline constexpr operator const Encoder##Type() const { return Encoder##Type(this, &GenericEncoderFunctions, &Emit); } \
+            always_inline constexpr operator const Encoder() const { return Encoder##Type(this, &GenericEncoderFunctions, &Emit); } \
         };
 
 #include "emitfive-riscv-enc.inl"
 
 #define INSTRUCTION(Name, name, Type, ...) \
-        struct Name##Instruction final: public Emit##Type<__VA_ARGS__> { using Emit##Type::operator();  using Emit##Type::operator const Encoder; using Emit##Type::operator Encoder##Type; using Emit##Type::Emit##Type; };
+        struct Name##Instruction final: public Emit##Type<__VA_ARGS__> { using Emit##Type::operator();  using Emit##Type::operator const Encoder; using Emit##Type::operator const Encoder##Type; using Emit##Type::Emit##Type; };
 
 #include "emitfive-riscv-insn.inl"
 
 #undef INSTRUCTION
 
         struct Assembler {
-            Assembler(uint32_t* dataBuffer) { Context.buffer = new CodeBuffer(dataBuffer); }
+            Assembler(uint32_t* dataBuffer) : Context { new CodeBuffer(dataBuffer) } {  }
             ~Assembler() { delete Context.buffer; }
 
             #define REGISTER_DECL(n) \
