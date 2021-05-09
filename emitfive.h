@@ -180,14 +180,24 @@ namespace emitfive {
 
 #include "emitfive-riscv-enc.inl"
 
-#define INSTRUCTION(Name, name, Type, ...) \
-        struct Name##Instruction final: public Emit##Type<__VA_ARGS__> { using Emit##Type::operator();  using Emit##Type::operator const Encoder; using Emit##Type::operator const Encoder##Type; using Emit##Type::Emit##Type; };
+        struct Assembler {
+
+            #define INSTRUCTION(Name, name, Type, ...) \
+                struct Name##Instruction final: public Emit##Type<__VA_ARGS__> { using Emit##Type::operator();  using Emit##Type::operator const Encoder; using Emit##Type::operator const Encoder##Type; using Emit##Type::Emit##Type; };
+
+            #include "emitfive-riscv-insn.inl"
+
+            #undef INSTRUCTION
+            union {
+                EncoderContext Context;
+#define INSTRUCTION(Name, name, Type, ...) const Name##Instruction name;
 
 #include "emitfive-riscv-insn.inl"
 
 #undef INSTRUCTION
+            };
 
-        struct Assembler {
+
             Assembler(uint32_t* dataBuffer) : Context { new CodeBuffer(dataBuffer) } {  }
             ~Assembler() { delete Context.buffer; }
 
@@ -304,16 +314,9 @@ namespace emitfive {
                 assert(label.bound == false);
                 label.bound = true;
             }
-
-            union {
-                EncoderContext Context;
-#define INSTRUCTION(Name, name, Type, ...) const Name##Instruction name;
-
-#include "emitfive-riscv-insn.inl"
-
-#undef INSTRUCTION
-            };
         };
+
+        static_assert(offsetof(Assembler, Context) == 0);
 
 
         struct RegisterGprExpression {
