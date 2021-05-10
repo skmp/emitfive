@@ -145,18 +145,18 @@ namespace emitfive {
 
 
         struct UnimplementedOpcodes {
-            #define DEFAULT_DECL(Name, Arguments) \
-            static constexpr decltype(EncoderFunctions::Name) Name##Unimplemented = [] Arguments { \
+            #define DEFAULT_DECL(Name, ContextArguments, Arguments) \
+            static constexpr decltype(EncoderFunctions::Name) Name##Unimplemented = [] ContextArguments { \
                 throw InvalidEncoderUsed<void Arguments> { "Invalid Encoder: " #Name ", " #Arguments }; \
             };
 
             
-            DEFAULT_DECL(emitLabel1, (const EncoderContext* const context, const RegisterGpr dst, const Label& destination))
-            DEFAULT_DECL(emitLabel2, (const EncoderContext* const context, const RegisterGpr src1, const RegisterGpr src2, const Label& destination))
-            DEFAULT_DECL(emitDst, (const EncoderContext* const context, const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2))
-            DEFAULT_DECL(emitDst2, (const EncoderContext* const context, const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2, const RegisterGpr src3, const uint32_t rm))
-            DEFAULT_DECL(emitImm, (const EncoderContext* const context, const RegisterGpr r1, const RegisterGpr r2, const uint32_t imm))
-            DEFAULT_DECL(emitImm20, (const EncoderContext* const context, const RegisterGpr rd, const uint32_t imm20))
+            DEFAULT_DECL(emitLabel1, (const EncoderContext* const context, const RegisterGpr dst, const Label& destination), (const RegisterGpr dst, const Label& destination))
+            DEFAULT_DECL(emitLabel2, (const EncoderContext* const context, const RegisterGpr src1, const RegisterGpr src2, const Label& destination), (const RegisterGpr src1, const RegisterGpr src2, const Label& destination))
+            DEFAULT_DECL(emitDst, (const EncoderContext* const context, const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2), (const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2))
+            DEFAULT_DECL(emitDst2, (const EncoderContext* const context, const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2, const RegisterGpr src3, const uint32_t rm), (const RegisterGpr dst, const RegisterGpr src1, const RegisterGpr src2, const RegisterGpr src3, const uint32_t rm))
+            DEFAULT_DECL(emitImm, (const EncoderContext* const context, const RegisterGpr r1, const RegisterGpr r2, const uint32_t imm), (const RegisterGpr r1, const RegisterGpr r2, const uint32_t imm))
+            DEFAULT_DECL(emitImm20, (const EncoderContext* const context, const RegisterGpr rd, const uint32_t imm20), (const RegisterGpr rd, const uint32_t imm20))
         };
 
 
